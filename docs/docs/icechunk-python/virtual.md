@@ -4,7 +4,7 @@ While Icechunk works wonderfully with native chunks managed by Zarr, there is lo
 
 !!! warning
 
-    While virtual references are fully supported in Icechunk, creating virtual datasets currently relies on using experimental or pre-release versions of open source tools. For full instructions on how to install the required tools and their current statuses [see the tracking issue on Github](https://github.com/earth-mover/icechunk/issues/197).
+    While virtual references are fully supported in Icechunk, creating virtual datasets currently relies on using experimental or pre-release versions of open source tools. You can use icechunk<=0.1.0alpha7 [see the tracking issue on Github](https://github.com/earth-mover/icechunk/issues/197) or just install VirtauliZarr using the custom [ab/upgrade-icechunk](https://github.com/zarr-developers/VirtualiZarr/tree/ab/upgrade-icechunk) branch.
     With time, these experimental features will make their way into the released packages.
 
 To create virtual Icechunk datasets with Python, the community utilizes the [kerchunk](https://fsspec.github.io/kerchunk/) and [VirtualiZarr](https://virtualizarr.readthedocs.io/en/latest/) packages.
@@ -29,6 +29,9 @@ pip install fsspec s3fs
 
 First, we need to find all of the files we are interested in, we will do this with fsspec using a `glob` expression to find every netcdf file in the August 2024 folder in the bucket:
 
+!!! note
+This requires your environment has some S3 credential set.
+
 ```python
 import fsspec
 
@@ -49,10 +52,11 @@ Now that we have the filenames of the data we need, we can create virtual datase
 
 ```python
 from virtualizarr import open_virtual_dataset
+from virtualizarr.readers import HDFVirtualBackend
 
 virtual_datasets =[
-    open_virtual_dataset(url, indexes={})
-    for url in oisst_files
+    open_virtual_dataset(url, indexes={}, backend=HDFVirtualBackend)
+    for url in oisst_files[0:2]
 ]
 ```
 
@@ -94,32 +98,18 @@ We have a virtual dataset with 31 timestamps! One hint that this worked correctl
     Take note of the `virtual_ref_config` passed into the `RepositoryConfig` when creating the store. This allows the icechunk store to have the necessary credentials to access the referenced netCDF data on s3 at read time. For more configuration options, see the [configuration page](./configuration.md).
 
 ```python
-from icechunk import Repository, StorageConfig, RepositoryConfig, VirtualRefConfig
+import icechunk
 
-storage = StorageConfig.s3_from_config(
-    bucket='YOUR_BUCKET_HERE',
-    prefix='icechunk/oisst',
-    region='us-east-1',
-    credentials=S3Credentials(
-        access_key_id="REPLACE_ME",
-        secret_access_key="REPLACE_ME",
-        session_token="REPLACE_ME"
-    )
-)
+storage = icechunk.local_filesystem_storage('icechunk/oisst')
 
-repo = Repository.create(
-    storage=storage,
-    config=RepositoryConfig(
-        virtual_ref_config=VirtualRefConfig.s3_anonymous(region='us-east-1'),
-    )
-)
+repo = icechunk.Repository.create(storage=storage)
 ```
 
 With the repo created, lets write our virtual dataset to Icechunk with VirtualiZarr!
 
 ```python
 session = repo.writable_session("main")
-virtual_ds.virtualize.to_icechunk(session.store())
+virtual_ds.virtualize.to_icechunk(session.store, )
 ```
 
 The refs are written so lets save our progress by committing to the store.
@@ -191,7 +181,6 @@ store.set_virtual_ref('c/0', 's3://mybucket/my/data/file.nc', offset=1000, lengt
 ##### Configuration
 
 S3 virtual references require configuring credential for the store to be able to access the specified s3 bucket. See [the configuration docs](./configuration.md#virtual-reference-storage-config) for instructions.
-
 
 #### Local Filesystem
 

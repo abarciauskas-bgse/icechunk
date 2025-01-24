@@ -1,7 +1,10 @@
 ---
 title: Sample Datasets
 ---
+
 # Sample Datasets
+
+Should this be removed? It was created with an older version of icechunk as I got an error trying to open it with xarray.
 
 ## Native Datasets
 
@@ -16,15 +19,14 @@ Check out an example dataset built using all virtual references pointing to dail
 ```python
 import icechunk
 
-storage = icechunk.StorageConfig.s3_anonymous(
+storage = icechunk.s3_storage(
     bucket='earthmover-sample-data',
     prefix='icechunk/oisst.2020-2024/',
     region='us-east-1',
+    anon=True,
 )
 
-repo = icechunk.Repository.open_existing(storage=storage, mode="r", config=icechunk.RepositoryConfig(
-    virtual_ref_config=icechunk.VirtualRefConfig.s3_anonymous(region='us-east-1'),
-))
+repo = icechunk.Repository.open(storage=storage)
 ```
 
 ![oisst](./assets/datasets/oisst.png)
