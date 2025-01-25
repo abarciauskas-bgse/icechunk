@@ -4,8 +4,15 @@ While Icechunk works wonderfully with native chunks managed by Zarr, there is lo
 
 !!! warning
 
-    While virtual references are fully supported in Icechunk, creating virtual datasets currently relies on using experimental or pre-release versions of open source tools. You can use icechunk<=0.1.0alpha7 [see the tracking issue on Github](https://github.com/earth-mover/icechunk/issues/197) or just install VirtauliZarr using the custom [ab/upgrade-icechunk](https://github.com/zarr-developers/VirtualiZarr/tree/ab/upgrade-icechunk) branch.
+    While virtual references are fully supported in Icechunk, creating virtual datasets currently relies on using experimental or pre-release versions of open source tools. For full instructions on how to install the required tools and their current statuses [see the tracking issue on Github](https://github.com/earth-mover/icechunk/issues/197).
     With time, these experimental features will make their way into the released packages.
+
+Suggested installation for this example:
+
+```
+pip install Virtualizarr==1.2.0 icechunk==0.1.0a7 git+https://github.com/mpiannucci/kerchunk@v3
+pip show Virtualizarr icechunk kerchunk
+```
 
 To create virtual Icechunk datasets with Python, the community utilizes the [kerchunk](https://fsspec.github.io/kerchunk/) and [VirtualiZarr](https://virtualizarr.readthedocs.io/en/latest/) packages.
 
@@ -29,16 +36,11 @@ pip install fsspec s3fs
 
 First, we need to find all of the files we are interested in, we will do this with fsspec using a `glob` expression to find every netcdf file in the August 2024 folder in the bucket:
 
-!!! note
-This requires your environment has some S3 credential set.
-
 ```python
 import fsspec
 
 fs = fsspec.filesystem('s3')
-
 oisst_files = fs.glob('s3://noaa-cdr-sea-surface-temp-optimum-interpolation-pds/data/v2.1/avhrr/202408/oisst-avhrr-v02r01.*.nc')
-
 oisst_files = sorted(['s3://'+f for f in oisst_files])
 #['s3://noaa-cdr-sea-surface-temp-optimum-interpolation-pds/data/v2.1/avhrr/201001/oisst-avhrr-v02r01.20100101.nc',
 # 's3://noaa-cdr-sea-surface-temp-optimum-interpolation-pds/data/v2.1/avhrr/201001/oisst-avhrr-v02r01.20100102.nc',
@@ -54,10 +56,7 @@ Now that we have the filenames of the data we need, we can create virtual datase
 from virtualizarr import open_virtual_dataset
 from virtualizarr.readers import HDFVirtualBackend
 
-virtual_datasets =[
-    open_virtual_dataset(url, indexes={}, backend=HDFVirtualBackend)
-    for url in oisst_files[0:2]
-]
+virtual_datasets =[open_virtual_dataset(url, indexes={}, backend=HDFVirtualBackend) for url in oisst_files[0:2]]
 ```
 
 We can now use `xarray` to combine these virtual datasets into one large virtual dataset (For more details on this operation see [`VirtualiZarr`'s documentation](https://virtualizarr.readthedocs.io/en/latest/usage.html#combining-virtual-datasets)). We know that each of our files share the same structure but with a different date. So we are going to concatenate these datasets on the `time` dimension.
@@ -98,18 +97,19 @@ We have a virtual dataset with 31 timestamps! One hint that this worked correctl
     Take note of the `virtual_ref_config` passed into the `RepositoryConfig` when creating the store. This allows the icechunk store to have the necessary credentials to access the referenced netCDF data on s3 at read time. For more configuration options, see the [configuration page](./configuration.md).
 
 ```python
-import icechunk
+from icechunk import StorageConfig, StoreConfig, IcechunkStore, VirtualRefConfig
 
-storage = icechunk.local_filesystem_storage('icechunk/oisst')
+storage = StorageConfig.filesystem("icechunk/oisst")
 
-repo = icechunk.Repository.create(storage=storage)
+store = IcechunkStore.create(storage=storage, config=StoreConfig(virtual_ref_config=VirtualRefConfig.s3_anonymous(region='us-east-1')))
+# or store = IcechunkStore.open_existing...
 ```
 
 With the repo created, lets write our virtual dataset to Icechunk with VirtualiZarr!
 
 ```python
 session = repo.writable_session("main")
-virtual_ds.virtualize.to_icechunk(session.store, )
+virtual_ds.virtualize.to_icechunk(session._session.store)
 ```
 
 The refs are written so lets save our progress by committing to the store.
